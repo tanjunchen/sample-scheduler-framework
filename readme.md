@@ -4,7 +4,7 @@
 
 工作流程图可以查看 ![工作流程图](image/scheduling-framework-extensions.png)
 
-相关文档参见[sig-scheduling](https://github.com/kubernetes/enhancements/tree/master/keps/sig-scheduling)
+相关文档参见 [sig-scheduling](https://github.com/kubernetes/enhancements/tree/master/keps/sig-scheduling)
 
 ## 前提
 
@@ -15,27 +15,27 @@
 将调度过程和绑定过程合在一起，称之为调度上下文（scheduling context）。调度是同步的，绑定过程是异步运行的。
 调度过程和绑定过程遇到如下情况时会中途退出，调度程序认为当前没有该 Pod 的可选节点或者产生内部错误，该 Pod 将被放回到待调度队列，并等待下次重试。
 
-*Pod Scheduling Context*
+**Pod Scheduling Context**
 
-*Scheduling Cycle*
+**Scheduling Cycle**
 
-QueueSort   Pre-filter    Filter    Post-filter   Scoring    Normalize scoring    Reserve
+[QueueSort   Pre-filter    Filter    Post-filter   Scoring    Normalize scoring    Reserve]
 
-QueueSort 扩展用于对 Pod 的待调度队列进行排序，以决定先调度哪个 Pod，QueueSort 扩展本质上只需要实现一个方法 Less(Pod1, Pod2) 用于比较两个 Pod 谁更优先获得调度即可，同一时间点只能有一个 QueueSort 插件生效。
+*QueueSort* 扩展用于对 Pod 的待调度队列进行排序，以决定先调度哪个 Pod，QueueSort 扩展本质上只需要实现一个方法 Less(Pod1, Pod2) 用于比较两个 Pod 谁更优先获得调度即可，同一时间点只能有一个 QueueSort 插件生效。
 
-Pre-filter 扩展用于对 Pod 的信息进行预处理，检查一些集群或 Pod 必须满足的前提条件，如果 pre-filter 返回了 error，则调度过程终止。
+*Pre-filter* 扩展用于对 Pod 的信息进行预处理，检查一些集群或 Pod 必须满足的前提条件，如果 pre-filter 返回了 error，则调度过程终止。
 
-Filter 扩展用于排除那些不能运行该 Pod 的节点，对于每一个节点，调度器将按顺序执行 filter 扩展；如果任何一个 filter 将节点标记为不可选，则余下的 filter 扩展将不会被执行。调度器可以同时对多个节点执行 filter 扩展。
+*Filter* 扩展用于排除那些不能运行该 Pod 的节点，对于每一个节点，调度器将按顺序执行 filter 扩展；如果任何一个 filter 将节点标记为不可选，则余下的 filter 扩展将不会被执行。调度器可以同时对多个节点执行 filter 扩展。
 
-Post-filter 是一个通知类型的扩展点，调用该扩展的参数是 filter 阶段结束后被筛选为可选节点的节点列表，可以在扩展中使用这些信息更新内部状态，或者产生日志或 metrics 信息。
+*Post-filter* 是一个通知类型的扩展点，调用该扩展的参数是 filter 阶段结束后被筛选为可选节点的节点列表，可以在扩展中使用这些信息更新内部状态，或者产生日志或 metrics 信息。
 
-Scoring 扩展用于为所有可选节点进行打分，调度器将针对每一个节点调用 Scoring 扩展，评分结果是一个范围内的整数。在 normalize scoring 阶段，调度器将会把每个 scoring 扩展对具体某个节点的评分结果和该扩展的权重合并起来，作为最终评分结果。
+*Scoring* 扩展用于为所有可选节点进行打分，调度器将针对每一个节点调用 Scoring 扩展，评分结果是一个范围内的整数。在 normalize scoring 阶段，调度器将会把每个 scoring 扩展对具体某个节点的评分结果和该扩展的权重合并起来，作为最终评分结果。
 
-Normalize scoring 扩展在调度器对节点进行最终排序之前修改每个节点的评分结果，注册到该扩展点的扩展在被调用时，将获得同一个插件中的 scoring 扩展的评分结果作为参数，调度框架每执行一次调度，都将调用所有插件中的一个 normalize scoring 扩展一次。
+*Normalize scoring* 扩展在调度器对节点进行最终排序之前修改每个节点的评分结果，注册到该扩展点的扩展在被调用时，将获得同一个插件中的 scoring 扩展的评分结果作为参数，调度框架每执行一次调度，都将调用所有插件中的一个 normalize scoring 扩展一次。
 
-Reserve 是一个通知性质的扩展点，有状态的插件可以使用该扩展点来获得节点上为 Pod 预留的资源，该事件发生在调度器将 Pod 绑定到节点之前，目的是避免调度器在等待 Pod 与节点绑定的过程中调度新的 Pod 到节点上时，发生实际使用资源超出可用资源的情况。（因为绑定 Pod 到节点上是异步发生的）。这是调度过程的最后一个步骤，Pod 进入 reserved 状态以后，要么在绑定失败时触发 Unreserve 扩展，要么在绑定成功时，由 Post-bind 扩展结束绑定过程。
+*Reserve* 是一个通知性质的扩展点，有状态的插件可以使用该扩展点来获得节点上为 Pod 预留的资源，该事件发生在调度器将 Pod 绑定到节点之前，目的是避免调度器在等待 Pod 与节点绑定的过程中调度新的 Pod 到节点上时，发生实际使用资源超出可用资源的情况。（因为绑定 Pod 到节点上是异步发生的）。这是调度过程的最后一个步骤，Pod 进入 reserved 状态以后，要么在绑定失败时触发 Unreserve 扩展，要么在绑定成功时，由 Post-bind 扩展结束绑定过程。
 
-Permit 扩展用于阻止或者延迟 Pod 与节点的绑定。Permit 扩展可以做下面三件事中的一项：
+*Permit* Permit 扩展用于阻止或者延迟 Pod 与节点的绑定，Permit 扩展可以做下面三件事中的一项：
 
     approve（批准）：当所有的 permit 扩展都 approve 了 Pod 与节点的绑定，调度器将继续执行绑定过程
     deny（拒绝）：如果任何一个 permit 扩展 deny 了 Pod 与节点的绑定，Pod 将被放回到待调度队列，此时将触发 Unreserve 扩展
@@ -43,33 +43,33 @@ Permit 扩展用于阻止或者延迟 Pod 与节点的绑定。Permit 扩展可�
 
 *Binding Cycle*
 
-Pre-bind    Bind      Post-bind    Unreserve
+[Pre-bind    Bind      Post-bind    Unreserve]
 
-Pre-bind 扩展用于在 Pod 绑定之前执行某些逻辑。例如，pre-bind 扩展可以将一个基于网络的数据卷挂载到节点上，以便 Pod 可以使用。如果任何一个 pre-bind 扩展返回错误，Pod 将被放回到待调度队列，此时将触发 Unreserve 扩展。
+*Pre-bind* 扩展用于在 Pod 绑定之前执行某些逻辑。例如，pre-bind 扩展可以将一个基于网络的数据卷挂载到节点上，以便 Pod 可以使用。如果任何一个 pre-bind 扩展返回错误，Pod 将被放回到待调度队列，此时将触发 Unreserve 扩展。
 
-Bind 扩展用于将 Pod 绑定到节点上。
+*Bind* 扩展用于将 Pod 绑定到节点上。
 
     只有所有的 pre-bind 扩展都成功执行了，bind 扩展才会执行
     调度框架按照 bind 扩展注册的顺序逐个调用 bind 扩展
     具体某个 bind 扩展可以选择处理或者不处理该 Pod
     如果某个 bind 扩展处理了该 Pod 与节点的绑定，余下的 bind 扩展将被忽略
 
-Post-bind 是一个通知性质的扩展。
+*Post-bind* 是一个通知性质的扩展。
 
     Post-bind 扩展在 Pod 成功绑定到节点上之后被动调用
     Post-bind 扩展是绑定过程的最后一个步骤，可以用来执行资源清理的动作
 
-Unreserve 是一个通知性质的扩展，如果为 Pod 预留了资源，Pod 又在被绑定过程中被拒绝绑定，
+*Unreserve* 是一个通知性质的扩展，如果为 Pod 预留了资源，Pod 又在被绑定过程中被拒绝绑定，
 则 unreserve 扩展将被调用。Unreserve 扩展应该释放已经为 Pod 预留的节点上的计算资源。
 在一个插件中，reserve 扩展和 unreserve 扩展应该成对出现。
 
-对应的拓展点接口可见于 pkg/scheduler/framework/v1alpha1/interface.go
+对应的拓展点接口可见于 kubernetes/kubernetes pkg/scheduler/framework/v1alpha1/interface.go
 
-源码简单示例可参见 pkg/scheduler/framework/plugins/examples
+源码中的简单示例可参见 kubernetes/kubernetes pkg/scheduler/framework/plugins/examples
 
 ## 示例
 
-实现对应的扩展点，然后将插件注册到调度器中即可，下面是默认调度器在初始化的时候注册的插件。
+本示例将实现对应的扩展点，然后将插件注册到调度器中，下面是默认调度器在初始化的时候注册插件。
 
     func NewRegistry() Registry {
     	return Registry{
@@ -111,20 +111,16 @@ Unreserve 是一个通知性质的扩展，如果为 Pod 预留了资源，Pod �
     type PluginFactory = func(configuration *runtime.Unknown, f FrameworkHandle) (Plugin, error)
 
 sample.New 实际上就是上面的这个函数，在这个函数中我们可以获取到插件中的一些数据然后进行逻辑处理即可，
-插件实现如下所示，我们这里只是简单获取下数据打印日志，如果你有实际需求的可以根据获取的数据就行处理即可，
+插件实现如下所示，我们这里只是简单获取下数据打印日志，如果你有实际需求的可以根据获取的数据就行处理即可。
 我们这里只是实现了 PreFilter、Filter、PreBind 三个扩展点，其它的可以用同样的方式来扩展即可。
 
-## 最后
+## 说明
 
-在项目根目录编译镜像
-docker build -t tanjunchen/sample-scheduler:1.0 .
+编译镜像之前请先 go build
 
-集群不在本地
-docker save  -o  sample-scheduler.tar tanjunchen/sample-scheduler
-scp
-docker load < sample-scheduler.tar
+docker build -t my-scheduler-framework-demo/sample-scheduler:1.0 .
 
-配置文件介绍
+调度器 yaml 文件如下：
 
 ```
 # ClusterRole 集群角色
@@ -343,9 +339,9 @@ spec:
               mountPath: /etc/kubernetes
 ```
 
-直接部署 `kubectl -f apply  *.yaml ` 上面的资源对象即可，这样我们就部署了一个名为 `sample-scheduler` 的调度器。
+直接部署 `kubectl -f apply  yaml ` 上面的资源对象即可，这样我们就部署了一个名为 `sample-scheduler` 的调度器。
 
-应用 yaml 文件。
+测试 yaml 文件如下：
 
 ```
 apiVersion: apps/v1
@@ -372,9 +368,13 @@ spec:
         - containerPort: 80
 ```
 
+执行以下命令查看 pod 启动情况
+
 kubectl get pods -n kube-system -l component=sample-scheduler
 
-kubectl logs -f pod名称 -n kube-system
+执行以下命令查看 pod 调度日志
+
+kubectl logs -f `pod-name` -n kube-system
 
 ```
 I0226 13:22:06.585043       1 reflector.go:158] Listing and watching *v1beta1.PodDisruptionBudget from k8s.io/client-go/informers/factory.go:134
@@ -405,10 +405,9 @@ I0226 13:37:59.788509       1 scheduler.go:667] pod default/test-scheduler-6d779
 
 从日志中我们得知 Pod 是调用自定义调度器的。
 
-kubectl get pods
+kubectl get pod `pod-name` -o yaml
 
-kubectl get pod pod名称 -o yaml
-
+```
 apiVersion: v1
 kind: Pod
 metadata:
@@ -508,31 +507,16 @@ status:
   - ip: 192.168.140.65
   qosClass: BestEffort
   startTime: "2020-02-26T13:37:59Z"
+```
 
-在 Kubernetes v1.17 版本中，Scheduler Framework 内置的预选和优选函数已经全部插件化，所以我们应该掌握并理解这种扩展调度器。
-
-# Scheduler 预选策略与优选函数
-
-## 介绍
-
-
-
-## 节点选择过程
-
-
-
-## 调度器
-
-
-
-## 高级调度设置机制
-
-
+在 Kubernetes v1.17 版本中，Scheduler Framework 内置的预选和优选函数已经全部插件化。
 
 # 注意事项
 
-go.mod 中的包要替换成自己的路径 replace  注意下
+注意下 go.mod 中的 replace
 
 # 参考
 
 https://www.qikqiak.com/post/custom-kube-scheduler/
+
+https://github.com/cnych/sample-scheduler-framework
